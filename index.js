@@ -17,7 +17,22 @@ const { createCanvas, loadImage } = require("canvas");
 const { registerFont } = require('canvas');
 const { prefix } = require('./config.json');
 const request = require('request');
-const Keyv = require('keyv');
+const mysql = require('mysql');
+
+var con = mysql.createConnection({
+	host: "remotemysql.com",
+	user: process.env.DB_USERNAME,
+	password: process.env.DB_PASSWORD,
+	database: process.env.DB_USERNAME
+});
+
+con.connect(function(err) {
+	if (err){
+		console.log(err);
+		return;
+	}
+	console.log("Connected to database!");
+});
 
 registerFont('fonts/Roboto-Regular.ttf', { family: 'Roboto' });
 
@@ -25,7 +40,6 @@ const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 const TOKEN_PATH = 'token.json';
 
 const token = process.env.DISCORD_TOKEN;
-const keyv = new Keyv();
 
 const version = '2.2.0';
 
@@ -91,11 +105,15 @@ bot.on('message', async message => {
 		return;
     }
 
-	else if (message.content.startsWith(`${prefix}set`) && message.author.id === process.env.SIMON_ID) {
-		keyv.on('error', err => console.error('Keyv connection error:', err));
-		var setProfile = argu.join(" ");
-		await keyv.set(message.author.id, setProfile);
-		return console.log("ID is set to " + await keyv.get(message.author.id));
+	else if (message.content.startsWith(`${prefix}setid`) && message.author.id === process.env.SIMON_ID) {
+		let gameID = argu.join(" ");
+		con.query(`REPLACE INTO Account (DiscordID,GameID) VALUES (${mysql.escape(message.author.id)},${mysql.escape(gameID)})`, (err) => {
+			if (err) {
+				throw err;
+				return;
+			}
+			return message.reply("Successfully set your Game ID to **" + gameID + "**");
+		})
 		/*for (var i = 10000000; i < 15000000; i++) {
 				let urlApi = "https://game.lifeafterpay.com/api/v1/user_info?roleId=" + i.toString() + "&serverId=500002";
 				request({url: urlApi, json: true }, function(err, res, json) {
@@ -107,10 +125,13 @@ bot.on('message', async message => {
 		}*/
 	}
 
-	else if (message.content.startsWith(`${prefix}profile`) && message.author.id === process.env.SIMON_ID) {
-		keyv.on('error', err => console.error('Keyv connection error:', err));
-		var gameID = await keyv.get(message.author.id);
-		return message.channel.send("**Game ID**: " + gameID);
+	else if (message.content.startsWith(`${prefix}myid`) && message.author.id === process.env.SIMON_ID) {
+		con.query(`SELECT GameID FROM Account WHERE DiscordID = ${mysql.escape(message.author.id)}`, (err,result) => {
+			if (err) {
+				throw err;
+			}
+			return message.reply("Your Game ID is **" + result[0].GameID + "**");
+		})
 	}
 
 	else if (message.content.startsWith(`${prefix}say`) && message.author.id === process.env.SIMON_ID) {
