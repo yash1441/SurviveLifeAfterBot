@@ -6,7 +6,7 @@ app.get('/', (req, res) => res.send('Locked & Loaded!'));
 
 app.listen(port, () => console.log(`Example app listening at http://localhost:${port}`));
 
-// ================= START BOT CODE ===================
+// ================= START BOT CODE =================== //
 const Discord = require('discord.js');
 const bot = new Discord.Client();
 const fs = require('fs');
@@ -15,20 +15,24 @@ const Fuse = require('fuse.js')
 const { google } = require('googleapis');
 const { createCanvas, loadImage } = require("canvas");
 const { registerFont } = require('canvas');
+const { prefix } = require('./config.json');
+const request = require('request');
+const Keyv = require('keyv');
+
 registerFont('fonts/Roboto-Regular.ttf', { family: 'Roboto' });
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 const TOKEN_PATH = 'token.json';
 
 const token = process.env.DISCORD_TOKEN;
+const keyv = new Keyv();
 
-const PREFIX = '!';
-
-const version = '2.0.0';
+const version = '2.2.0';
 
 fs.readFile('credentials.json', (err, content) => {
     if (err) return console.log('Error loading client secret file:', err);
     authorize(JSON.parse(content), listRecipes);
+	authorize(JSON.parse(content), listNano);
 });
 
 function authorize(credentials, callback) {
@@ -70,84 +74,150 @@ function getNewToken(oAuth2Client, callback) {
 bot.on('ready', () => {
     console.log('This bot is online!');
     bot.user.setActivity('Simon#0988', { type: 'LISTENING'});
-    console.log("Servers:")
-    bot.guilds.cache.forEach((guild) => {
-        console.log(guild.name);
-    });
 })
 
 bot.on('message', async message => {
-    if (message.content === "HELLO") {
-        message.reply('HELLO FRIEND!');
+	if (message.author.bot)
+        return;
+	
+	const argu = message.content.slice(prefix.length).trim().split(/ +/g);
+	argu.shift().toLowerCase();
+
+    if (message.content.startsWith(`${prefix}servers`) && message.author.id === process.env.SIMON_ID) {
+		message.reply('Sent in PM!');
+		bot.guilds.cache.forEach((guild) => {
+        	message.author.send(guild.name);
+    	});
+		return;
     }
 
-    else if (message.content === "!reloadlist") {
-        message.reply('Reloading!');
-        console.log('Reloading.');
+	else if (message.content.startsWith(`${prefix}set`) && message.author.id === process.env.SIMON_ID) {
+		keyv.on('error', err => console.error('Keyv connection error:', err));
+		var setProfile = argu.join(" ");
+		await keyv.set(message.author.id, setProfile);
+		return console.log("ID is set to " + await keyv.get(message.author.id));
+		/*for (var i = 10000000; i < 15000000; i++) {
+				let urlApi = "https://game.lifeafterpay.com/api/v1/user_info?roleId=" + i.toString() + "&serverId=500002";
+				request({url: urlApi, json: true }, function(err, res, json) {
+					if (err) {
+						throw err;
+					}
+					if(json.data.rolename == "Foxyy") console.log(i);
+				});
+		}*/
+	}
+
+	else if (message.content.startsWith(`${prefix}profile`) && message.author.id === process.env.SIMON_ID) {
+		keyv.on('error', err => console.error('Keyv connection error:', err));
+		var gameID = await keyv.get(message.author.id);
+		return message.channel.send("**Game ID**: " + gameID);
+	}
+
+	else if (message.content.startsWith(`${prefix}say`) && message.author.id === process.env.SIMON_ID) {
+		var sayMessage = argu.join(" ");
+
+		if (!sayMessage) return message.reply("Error: No message specified.")
+
+		bot.guilds.cache.forEach(guild => {
+            try {
+                const channel = guild.channels.cache.find(channel => channel.name === 'general') || guild.channels.cache.first();
+                if (channel) {
+                    channel.send(sayMessage);
+                } else {
+                    console.log('The server ' + guild.name + ' has no channels.');
+                }
+            } catch (err) {
+                console.log('Could not send message to ' + guild.name + '.');
+            }
+        });
+		return;
+	}
+
+    else if (message.content.startsWith(`${prefix}reloadlist`)) {
         fs.readFile('credentials.json', (err, content) => {
             if (err) return console.log('Error loading client secret file:', err);
             authorize(JSON.parse(content), listRecipes);
+			authorize(JSON.parse(content), listNano);
         });
         recipes = [];
+		nanos = [];
+		return message.reply('Reloading!');
     }
 
-    else if (message.content === "!help") {
-        message.channel.send("**Commands**" + "\n" + "• !recipe <recipe name>" + "\n" + "*Example: !recipe beef ox tripe*");
+    else if (message.content.startsWith(`${prefix}help`)) {
+        return message.channel.send("**Commands**" + "\n\n" + "• !recipe <recipe name>" + "\n" + "*Example: !recipe beef ox tripe*" + "\n\n" + "• !nano <item name>" + "\n" + "*Example: !nano wood core*" + "\n\n" + "• !reloadlist" + "\n" + "*Reloads the data from <https://bit.ly/LAguides>*");
     }
 
-    var i = message.content.substring(PREFIX.length).indexOf(' ');
-    var args = [message.content.substring(PREFIX.length).slice(0, i), message.content.substring(PREFIX.length).slice(i + 1)];
+	else if (message.content.startsWith(`${prefix}nano`)) {
+		var args = argu.join(" ");
 
-    switch (args[0]) {
-        case 'recipe':
-            if (!args[1]) return message.reply('Error please define a second argument.');
+		if (!args) return message.channel.send("<http://bit.ly/LAnanoplastic>");
 
-            var finalRecipe =  returnRecipe(args[1]);
+		var finalNano =  returnNano(args);
 
-            if (finalRecipe === "No such recipe found.") {
-                message.channel.send(finalRecipe);
-                break;
-            }
+		if (finalNano === "No such item found.") {
+			return message.channel.send(finalNano);
+		}
 
-            var recipeName = finalRecipe[0];
-            var recipeIngredients = finalRecipe[1];
-            var recipeStats = finalRecipe[2];
+		var itemName = finalNano[0];
+		var itemMinNano1 = finalNano[1];
+		var itemMaxNano1 = finalNano[2];
+		var itemMinNano2 = finalNano[3];
+		var itemMaxNano2 = finalNano[4];
+		var itemMinNano3 = finalNano[5];
+		var itemMaxNano3 = finalNano[6];
 
-            const canvas = createCanvas(700, 250);
-	          const ctx = canvas.getContext('2d');
+		return message.channel.send("**Item**: " + itemName + "\n\n**Nanoplastic 1**: " + itemMinNano1 + " - " + itemMaxNano1 + "\n**Nanoplastic 2**: " + itemMinNano2 + " - " + itemMaxNano2 + "\n**Nanoplastic 3**: " + itemMinNano3 + " - " + itemMaxNano3);
+	}
 
-            const background = await loadImage('./wallpaper.png');
-	          ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
+	else if (message.content.startsWith(`${prefix}recipe`)) {
+		var args = argu.join(" ");
 
-            ctx.textAlign = 'center';
-            ctx.font = '42px Roboto';
-            ctx.fillStyle = '#73260D';
-            ctx.fillText(recipeName, canvas.width / 2, canvas.height / 2 - 50);
-            ctx.font = '24px Roboto';
-            ctx.fillStyle = '#61210B';
-            ctx.fillText(recipeIngredients, canvas.width / 2, canvas.height / 2 + 15);
+		if (!args) return message.channel.send("<http://bit.ly/LArecipe>");
 
-            var recipeStatsFormatted = getLines(ctx, recipeStats, canvas.width);
+		var finalRecipe =  returnRecipe(args);
 
-            if (recipeStatsFormatted.length == 1) {
-                ctx.font = '20px Roboto';
-                ctx.fillStyle = '#B33B14';
-                ctx.fillText(recipeStats, canvas.width / 2, canvas.height / 2 + 60);
-            }
-                       
-            else {
-                ctx.font = '20px Roboto';
-                ctx.fillStyle = '#B33B14';
-                ctx.fillText(recipeStatsFormatted[0], canvas.width / 2, canvas.height / 2 + 60);
-                ctx.fillText(recipeStatsFormatted[1], canvas.width / 2, canvas.height / 2 + 80);
-            }
+		if (finalRecipe === "No such recipe found.") {
+			return message.channel.send(finalRecipe);
+		}
 
-            const attachment = new Discord.MessageAttachment(canvas.toBuffer(), "recipe.png");
+		var recipeName = finalRecipe[0];
+		var recipeIngredients = finalRecipe[1];
+		var recipeStats = finalRecipe[2];
 
-            message.channel.send("", attachment);
+		const canvas = createCanvas(700, 250);
+		const ctx = canvas.getContext('2d');
 
-            break;
-    }
+		const background = await loadImage('./wallpaper.png');
+		ctx.drawImage(background, 0, 0, canvas.width, canvas.height);
+
+		ctx.textAlign = 'center';
+		ctx.font = '42px Roboto';
+		ctx.fillStyle = '#73260D';
+		ctx.fillText(recipeName, canvas.width / 2, canvas.height / 2 - 50);
+		ctx.font = '24px Roboto';
+		ctx.fillStyle = '#61210B';
+		ctx.fillText(recipeIngredients, canvas.width / 2, canvas.height / 2 + 15);
+
+		var recipeStatsFormatted = getLines(ctx, recipeStats, canvas.width);
+
+		if (recipeStatsFormatted.length == 1) {
+			ctx.font = '20px Roboto';
+			ctx.fillStyle = '#B33B14';
+			ctx.fillText(recipeStats, canvas.width / 2, canvas.height / 2 + 60);
+		}
+					
+		else {
+			ctx.font = '20px Roboto';
+			ctx.fillStyle = '#B33B14';
+			ctx.fillText(recipeStatsFormatted[0], canvas.width / 2, canvas.height / 2 + 60);
+			ctx.fillText(recipeStatsFormatted[1], canvas.width / 2, canvas.height / 2 + 80);
+		}
+
+		const attachment = new Discord.MessageAttachment(canvas.toBuffer(), "recipe.png");
+
+		return message.channel.send("", attachment);
+	}
 })
 
 function getLines(ctx, text, maxWidth) {
@@ -170,36 +240,77 @@ function getLines(ctx, text, maxWidth) {
 }
 
 let recipes = [];
+let nanos = [];
+
+function listNano(auth) {
+	const sheets = google.sheets({ version: 'v4', auth });
+    sheets.spreadsheets.values.get({
+        spreadsheetId: '19Y1tZdekS7OOAr6Bii3K_E8wskNudagu1H3wmQ_CzjI',
+        range: 'Nanoplastic Conversion!B3:I106',
+    }, (err, res) => {
+        if (err) return console.log('The API returned an error: ' + err);
+        const rows = res.data.values;
+        if (rows.length) {
+            rows.map((row) => {
+                nanos.push(`${row[0]}; ${row[2]}; ${row[3]}; ${row[4]}; ${row[5]}; ${row[6]}; ${row[7]}`);
+            });
+        } else {
+            console.log('No data found.');
+        }
+        console.log("Items: " + nanos.length);
+    });
+}
+
+function returnNano(name) {
+    var i;
+    for (i = 0; i < nanos.length; i++) {
+        let item = nanos[i].split("; ");
+        if (item[0].toUpperCase() === name.toUpperCase())
+            return [item[0], item[1], item[2], item[3], item[4], item[5], item[6]];
+    }
+    var item = new Array(nanos.length);
+    var item2 = new Array(nanos.length);
+    for (i = 0; i < nanos.length; i++) {
+        item[i] = nanos[i].split("; ");
+        item2[i] = item[i][0];
+    }
+    const options = {
+        includeScore: true
+    }
+    const fuse = new Fuse(item2, options);
+    const result = fuse.search(name);
+    const finalItem = Object.values(result[0])
+    return [item[finalItem[1]][0], item[finalItem[1]][1], item[finalItem[1]][2], item[finalItem[1]][3], item[finalItem[1]][4], item[finalItem[1]][5], item[finalItem[1]][6]];
+}
 
 function listRecipes(auth) {
     const sheets = google.sheets({ version: 'v4', auth });
     sheets.spreadsheets.values.get({
         spreadsheetId: '19Y1tZdekS7OOAr6Bii3K_E8wskNudagu1H3wmQ_CzjI',
-        range: 'Recipe List!B3:D302',
+        range: 'Recipe List!B3:D303',
     }, (err, res) => {
         if (err) return console.log('The API returned an error: ' + err);
         const rows = res.data.values;
         if (rows.length) {
-            //console.log('Dish, Recipe, Stats:');
             rows.map((row) => {
                 recipes.push(`${row[0]}; ${row[1]}; ${row[2]}`);
             });
         } else {
             console.log('No data found.');
         }
-        //console.log(recipes);
-        //console.log('--------------------');
-
         console.log("Recipes: " + recipes.length);
     });
 }
 
 function returnRecipe(name) {
+	if (name === 'random') {
+		let randomDish = recipes[Math.floor(Math.random() * (recipes.length - 1))].split("; ");
+		return [randomDish[0], randomDish[1], randomDish[2]];
+	}
     var i;
     for (i = 0; i < recipes.length; i++) {
         let dish = recipes[i].split("; ");
         if (dish[0].toUpperCase() === name.toUpperCase())
-            //return "**__" + dish[0] + "__**" + "\n\n" + "**Recipe**" + "\n" + dish[1] + "\n\n" + "**Stats**" + "\n" + dish[2];
             return [dish[0], dish[1], dish[2]];
     }
     var dish = new Array(recipes.length);
@@ -214,7 +325,6 @@ function returnRecipe(name) {
     const fuse = new Fuse(dish2, options);
     const result = fuse.search(name);
     const finalDish = Object.values(result[0])
-    //console.log(dish[finalDish[1]]);
     return [dish[finalDish[1]][0], dish[finalDish[1]][1], dish[finalDish[1]][2]];
 }
 
