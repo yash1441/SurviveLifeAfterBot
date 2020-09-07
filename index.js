@@ -19,19 +19,12 @@ const { prefix } = require('./config.json');
 const request = require('request');
 const mysql = require('mysql');
 
-var con = mysql.createConnection({
+var con = mysql.createPool({
+	connectionLimit: 10, // default = 10
 	host: "remotemysql.com",
 	user: process.env.DB_USERNAME,
 	password: process.env.DB_PASSWORD,
 	database: process.env.DB_USERNAME
-});
-
-con.connect(function(err) {
-	if (err){
-		console.log(err);
-		return;
-	}
-	console.log("Connected to database!");
 });
 
 registerFont('fonts/Roboto-Regular.ttf', { family: 'Roboto' });
@@ -41,7 +34,7 @@ const TOKEN_PATH = 'token.json';
 
 const token = process.env.DISCORD_TOKEN;
 
-const version = '2.2.0';
+const version = '2.2.2';
 
 fs.readFile('credentials.json', (err, content) => {
     if (err) return console.log('Error loading client secret file:', err);
@@ -105,15 +98,19 @@ bot.on('message', async message => {
 		return;
     }
 
-	else if (message.content.startsWith(`${prefix}setid`) && message.author.id === process.env.SIMON_ID) {
+	else if (message.content.startsWith(`${prefix}setid`)) {
 		let gameID = argu.join(" ");
-		con.query(`REPLACE INTO Account (DiscordID,GameID) VALUES (${mysql.escape(message.author.id)},${mysql.escape(gameID)})`, (err) => {
-			if (err) {
-				throw err;
-				return;
-			}
-			return message.reply("Successfully set your Game ID to **" + gameID + "**");
-		})
+		if (!gameID) return message.reply("Error: No game ID specified.");
+		con.getConnection(function (err, connection) {
+			connection.query(`REPLACE INTO Account (DiscordID,GameID) VALUES (${mysql.escape(message.author.id)},${mysql.escape(gameID)})`, (err) => {
+				if (err) {
+					console.error('error connecting: ' + err.stack);
+					return;
+				}
+				connection.release();
+			});
+		});
+		return message.reply("Successfully set your Game ID to **" + gameID + "**");
 		/*for (var i = 10000000; i < 15000000; i++) {
 				let urlApi = "https://game.lifeafterpay.com/api/v1/user_info?roleId=" + i.toString() + "&serverId=500002";
 				request({url: urlApi, json: true }, function(err, res, json) {
@@ -125,19 +122,24 @@ bot.on('message', async message => {
 		}*/
 	}
 
-	else if (message.content.startsWith(`${prefix}myid`) && message.author.id === process.env.SIMON_ID) {
-		con.query(`SELECT GameID FROM Account WHERE DiscordID = ${mysql.escape(message.author.id)}`, (err,result) => {
-			if (err) {
-				throw err;
-			}
-			return message.reply("Your Game ID is **" + result[0].GameID + "**");
-		})
+	else if (message.content.startsWith(`${prefix}myid`)) {
+		var gameID = [];
+		con.getConnection(function (err, connection) {
+			connection.query(`SELECT GameID FROM Account WHERE DiscordID = ${mysql.escape(message.author.id)}`, (err,result) => {
+				if (err) {
+					console.error('error connecting: ' + err.stack);
+				}
+				if (result[0].GameID == undefined) message.reply("Please use !setid <your game id> to set your Game ID first.");
+				else message.reply("Your Game ID is **" + result[0].GameID + "**");
+				return connection.release();
+			});
+		});
 	}
 
 	else if (message.content.startsWith(`${prefix}say`) && message.author.id === process.env.SIMON_ID) {
 		var sayMessage = argu.join(" ");
 
-		if (!sayMessage) return message.reply("Error: No message specified.")
+		if (!sayMessage) return message.reply("Error: No message specified.");
 
 		bot.guilds.cache.forEach(guild => {
             try {
@@ -166,7 +168,7 @@ bot.on('message', async message => {
     }
 
     else if (message.content.startsWith(`${prefix}help`)) {
-        return message.channel.send("**Commands**" + "\n\n" + "• !recipe <recipe name>" + "\n" + "*Example: !recipe beef ox tripe*" + "\n\n" + "• !nano <item name>" + "\n" + "*Example: !nano wood core*" + "\n\n" + "• !reloadlist" + "\n" + "*Reloads the data from <https://bit.ly/LAguides>*");
+        return message.channel.send("**Commands**" + "\n\n" + "• !recipe <recipe name>" + "\n" + "*Example: !recipe beef ox tripe*" + "\n\n" + "• !nano <item name>" + "\n" + "*Example: !nano wood core*" + "\n\n" + "• !reloadlist" + "\n" + "*Reloads the data from <https://bit.ly/LAguides>*" + "\n\n" + "• !setid <game id>" + "\n" + "*Example: !setid 12166043*" + "\n\n" + "• !myid" + "\n" + "*Returns your Game ID after you have !setid once before.*");
     }
 
 	else if (message.content.startsWith(`${prefix}nano`)) {
