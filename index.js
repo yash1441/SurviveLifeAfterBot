@@ -17,15 +17,9 @@ const { createCanvas, loadImage } = require("canvas");
 const { registerFont } = require('canvas');
 const { prefix } = require('./config.json');
 const request = require('request');
-const mysql = require('mysql');
+const Database = require("@replit/database");
 
-var con = mysql.createPool({
-	connectionLimit: 10, // default = 10
-	host: "remotemysql.com",
-	user: process.env.DB_USERNAME,
-	password: process.env.DB_PASSWORD,
-	database: process.env.DB_USERNAME
-});
+const db = new Database();
 
 registerFont('fonts/Roboto-Regular.ttf', { family: 'Roboto' });
 
@@ -34,7 +28,7 @@ const TOKEN_PATH = 'token.json';
 
 const token = process.env.DISCORD_TOKEN;
 
-const version = '2.2.2';
+const version = '2.2.3';
 
 fs.readFile('credentials.json', (err, content) => {
     if (err) return console.log('Error loading client secret file:', err);
@@ -99,18 +93,22 @@ bot.on('message', async message => {
     }
 
 	else if (message.content.startsWith(`${prefix}setid`)) {
-		let gameID = argu.join(" ");
-		if (!gameID) return message.reply("Error: No game ID specified.");
-		con.getConnection(function (err, connection) {
-			connection.query(`REPLACE INTO Account (DiscordID,GameID) VALUES (${mysql.escape(message.author.id)},${mysql.escape(gameID)})`, (err) => {
-				if (err) {
-					console.error('error connecting: ' + err.stack);
-					return;
-				}
-				connection.release();
-			});
+		let setGameID = argu.join(" ");
+		if (!setGameID) return message.reply("Error: No game ID specified.");
+		await db.set(message.author.id, setGameID).then(() => {
+			message.reply("Successfully set your Game ID to **" + setGameID + "**");
 		});
-		return message.reply("Successfully set your Game ID to **" + gameID + "**");
+		return;
+	}
+
+	else if (message.content.startsWith(`${prefix}myid`)) {
+		db.get(message.author.id).then(value => {
+			if (value == null) message.reply("Please use !setid *<your game id>* to set your Game ID first.");
+			else message.reply("Your Game ID is **" + value + "**");
+		});
+		return;
+	}
+
 		/*for (var i = 10000000; i < 15000000; i++) {
 				let urlApi = "https://game.lifeafterpay.com/api/v1/user_info?roleId=" + i.toString() + "&serverId=500002";
 				request({url: urlApi, json: true }, function(err, res, json) {
@@ -118,23 +116,7 @@ bot.on('message', async message => {
 						throw err;
 					}
 					if(json.data.rolename == "Foxyy") console.log(i);
-				});
-		}*/
-	}
-
-	else if (message.content.startsWith(`${prefix}myid`)) {
-		var gameID = [];
-		con.getConnection(function (err, connection) {
-			connection.query(`SELECT GameID FROM Account WHERE DiscordID = ${mysql.escape(message.author.id)}`, (err,result) => {
-				if (err) {
-					console.error('error connecting: ' + err.stack);
-				}
-				if (result[0].GameID == undefined) message.reply("Please use !setid <your game id> to set your Game ID first.");
-				else message.reply("Your Game ID is **" + result[0].GameID + "**");
-				return connection.release();
-			});
-		});
-	}
+				});*/
 
 	else if (message.content.startsWith(`${prefix}say`) && message.author.id === process.env.SIMON_ID) {
 		var sayMessage = argu.join(" ");
