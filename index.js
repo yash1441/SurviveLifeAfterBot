@@ -28,7 +28,7 @@ const TOKEN_PATH = 'token.json';
 
 const token = process.env.DISCORD_TOKEN;
 
-const version = '2.2.3';
+const version = '2.2.5';
 
 fs.readFile('credentials.json', (err, content) => {
     if (err) return console.log('Error loading client secret file:', err);
@@ -149,8 +149,13 @@ bot.on('message', async message => {
 		return message.reply('Reloading!');
     }
 
+	else if (message.content.startsWith(`${prefix}invite`)) {
+		message.reply('Sent in PM!');
+		return message.author.send("**Survive LifeAfter Bot Invite Link**\n<https://discord.com/oauth2/authorize?client_id=668573457147101195&scope=bot&permissions=8>");
+	}
+
     else if (message.content.startsWith(`${prefix}help`)) {
-        return message.channel.send("**Commands**" + "\n\n" + "• !recipe <recipe name>" + "\n" + "*Example: !recipe beef ox tripe*" + "\n\n" + "• !nano <item name>" + "\n" + "*Example: !nano wood core*" + "\n\n" + "• !reloadlist" + "\n" + "*Reloads the data from <https://bit.ly/LAguides>*" + "\n\n" + "• !setid <game id>" + "\n" + "*Example: !setid 12166043*" + "\n\n" + "• !myid" + "\n" + "*Returns your Game ID after you have !setid once before.*");
+        return message.channel.send("**Commands**" + "\n\n" + "• !recipe <recipe name>" + "\n" + "*Example: !recipe beef ox tripe*" + "\n\n" + "• !nano <item name>" + "\n" + "*Example: !nano wood core*" + "\n\n" + "• !reloadlist" + "\n" + "*Reloads the data from <https://bit.ly/LAguides>*" + "\n\n" + "• !setid <game id>" + "\n" + "*Example: !setid 12166043*" + "\n\n" + "• !myid" + "\n" + "*Returns your Game ID after you have !setid once before.*" + "\n\n" + "• !invite" + "\n" + "*Returns the Invite link for this Bot in your PM.*");
     }
 
 	else if (message.content.startsWith(`${prefix}nano`)) {
@@ -251,7 +256,7 @@ function listNano(auth) {
 	const sheets = google.sheets({ version: 'v4', auth });
     sheets.spreadsheets.values.get({
         spreadsheetId: '19Y1tZdekS7OOAr6Bii3K_E8wskNudagu1H3wmQ_CzjI',
-        range: 'Nanoplastic Conversion!B3:I106',
+        range: 'Nanoplastic Conversion!B3:I107',
     }, (err, res) => {
         if (err) return console.log('The API returned an error: ' + err);
         const rows = res.data.values;
@@ -284,7 +289,7 @@ function returnNano(name) {
     }
     const fuse = new Fuse(item2, options);
     const result = fuse.search(name);
-    const finalItem = Object.values(result[0])
+    const finalItem = Object.values(result[0]);
     return [item[finalItem[1]][0], item[finalItem[1]][1], item[finalItem[1]][2], item[finalItem[1]][3], item[finalItem[1]][4], item[finalItem[1]][5], item[finalItem[1]][6]];
 }
 
@@ -329,7 +334,7 @@ function returnRecipe(name) {
     }
     const fuse = new Fuse(dish2, options);
     const result = fuse.search(name);
-    const finalDish = Object.values(result[0])
+    const finalDish = Object.values(result[0]);
     return [dish[finalDish[1]][0], dish[finalDish[1]][1], dish[finalDish[1]][2]];
 }
 
