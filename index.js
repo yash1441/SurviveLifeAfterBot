@@ -2,13 +2,11 @@ const express = require('express');
 const app = express();
 const port = 3000;
 
-app.get('/', (req, res) => res.send('Locked & Loaded!'));
-
-app.listen(port, () => console.log(`Example app listening at http://localhost:${port}`));
-
 // ================= START BOT CODE =================== //
 const Discord = require('discord.js');
-const bot = new Discord.Client();
+
+let bot = new Discord.Client();
+
 const fs = require('fs');
 const readline = require('readline');
 const Fuse = require('fuse.js')
@@ -21,14 +19,38 @@ const Database = require("@replit/database");
 
 const db = new Database();
 
+const helpEmbed = new Discord.MessageEmbed()
+	.setColor('#EEFF00')
+	.setTitle('Help Menu')
+	.setAuthor('Scientia', 'https://cdn.discordapp.com/avatars/668573457147101195/7cdde3430684d449a80e6c441eee0492.png', 'https://discord.com/oauth2/authorize?client_id=668573457147101195&scope=bot&permissions=8')
+	.setDescription('List of Commands:')
+	.setThumbnail('https://cdn.discordapp.com/avatars/668573457147101195/7cdde3430684d449a80e6c441eee0492.png')
+	.addFields(
+		{ name: '\u200B', value: '\u200B' },
+		{ name: '!recipe [Recipe Name]', value: 'Example: !recipe beef ox tripe' },
+		{ name: '!nano [Item Name]', value: 'Example: !nano wood core' },
+		{ name: '!reloadlist', value: 'Reloads the data from <https://bit.ly/LAguides>' },
+		{ name: '!setid [Game ID]', value: 'Example: !setid 12166043' },
+		{ name: '!myid', value: 'Returns your Game ID after you have used !setid once before.' },
+		{ name: '!invite', value: 'Returns the Invite link for this bot in your PM.' },
+		{ name: '!channel [#channel-name]', value: 'Set a channel to receive bot announcements.' },
+		{ name: '\u200B', value: '\u200B' },
+	)
+	.setTimestamp()
+	.setFooter('Contact Simon#0988 for suggestions, feedbacks & questions about the bot', 'https://cdn.discordapp.com/avatars/668573457147101195/7cdde3430684d449a80e6c441eee0492.png');
+
 registerFont('fonts/Roboto-Regular.ttf', { family: 'Roboto' });
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 const TOKEN_PATH = 'token.json';
 
-const token = process.env.DISCORD_TOKEN;
+//const token2 = process.env.DISCORD_TOKEN;
 
-const version = '2.2.5';
+const token2 = process.env['DISCORD_TOKEN'];
+
+const version = '2.3.1';
+app.get('/', (req, res) => res.send(version));
+app.listen(port, () => console.log(`Example app listening at http://localhost:${port}`));
 
 fs.readFile('credentials.json', (err, content) => {
     if (err) return console.log('Error loading client secret file:', err);
@@ -92,6 +114,10 @@ bot.on('message', async message => {
 		return;
     }
 
+	else if (message.content.startsWith(`${prefix}probability`)) {
+		return message.channel.send("https://docs.google.com/spreadsheets/d/1PPzNGzTL70ytrQNEHnGeHpY9hTYB2J_yiYuEBPqgg_A/edit?usp=sharing");
+	}
+
 	else if (message.content.startsWith(`${prefix}setid`)) {
 		let setGameID = argu.join(" ");
 		if (!setGameID) return message.reply("Error: No game ID specified.");
@@ -118,6 +144,32 @@ bot.on('message', async message => {
 					if(json.data.rolename == "Foxyy") console.log(i);
 				});*/
 
+	else if (message.content.startsWith(`${prefix}channel`) && message.member.hasPermission('ADMINISTRATOR')) {
+		var channelID = argu.join(" ");
+
+		if (channelID.startsWith('<#') && channelID.endsWith('>')) {
+			channelID = channelID.slice(2, -1);
+		}
+
+		if (!channelID) {
+			db.get(message.guild.id).then(value => {
+				if (value == null) message.reply("Please use !channel *#channel-name-here* to set the bot announcement channel first.");
+				else message.reply("Your current bot announcement channel is **<#" + value + ">**");
+			});
+			return;
+		}
+
+		let channel = message.guild.channels.cache.find(channel => channel.id == channelID)
+		
+		if (!channel) return message.reply("Error: Couldn't find the channel.");
+
+		await db.set(message.guild.id, channelID).then(() => {
+			message.reply("Successfully set bot announcement to **<#" + channelID + ">**");
+		});
+
+		return;
+	}
+
 	else if (message.content.startsWith(`${prefix}say`) && message.author.id === process.env.SIMON_ID) {
 		var sayMessage = argu.join(" ");
 
@@ -125,12 +177,22 @@ bot.on('message', async message => {
 
 		bot.guilds.cache.forEach(guild => {
             try {
-                const channel = guild.channels.cache.find(channel => channel.name === 'general') || guild.channels.cache.first();
-                if (channel) {
-                    channel.send(sayMessage);
-                } else {
-                    console.log('The server ' + guild.name + ' has no channels.');
-                }
+				db.get(guild.id).then(value => {
+					if (value == null) { return;
+						console.log(guild.name + " has not set a channel yet.");
+
+						let channel = guild.channels.cache.find(channel => channel.name === 'general') || guild.channels.cache.first();
+						if (channel) {
+							channel.send(sayMessage);
+						} else {
+							console.log('The server ' + guild.name + ' has no channels.');
+						}
+					}
+					else {
+						let channel = value;
+						bot.channels.cache.get(channel).send(sayMessage);
+					} 
+				});
             } catch (err) {
                 console.log('Could not send message to ' + guild.name + '.');
             }
@@ -155,7 +217,7 @@ bot.on('message', async message => {
 	}
 
     else if (message.content.startsWith(`${prefix}help`)) {
-        return message.channel.send("**Commands**" + "\n\n" + "• !recipe <recipe name>" + "\n" + "*Example: !recipe beef ox tripe*" + "\n\n" + "• !nano <item name>" + "\n" + "*Example: !nano wood core*" + "\n\n" + "• !reloadlist" + "\n" + "*Reloads the data from <https://bit.ly/LAguides>*" + "\n\n" + "• !setid <game id>" + "\n" + "*Example: !setid 12166043*" + "\n\n" + "• !myid" + "\n" + "*Returns your Game ID after you have !setid once before.*" + "\n\n" + "• !invite" + "\n" + "*Returns the Invite link for this Bot in your PM.*");
+        return message.channel.send(helpEmbed);
     }
 
 	else if (message.content.startsWith(`${prefix}nano`)) {
@@ -256,7 +318,7 @@ function listNano(auth) {
 	const sheets = google.sheets({ version: 'v4', auth });
     sheets.spreadsheets.values.get({
         spreadsheetId: '19Y1tZdekS7OOAr6Bii3K_E8wskNudagu1H3wmQ_CzjI',
-        range: 'Nanoplastic Conversion!B3:I107',
+        range: 'Nanoplastic Conversion!B3:I125',
     }, (err, res) => {
         if (err) return console.log('The API returned an error: ' + err);
         const rows = res.data.values;
@@ -297,7 +359,7 @@ function listRecipes(auth) {
     const sheets = google.sheets({ version: 'v4', auth });
     sheets.spreadsheets.values.get({
         spreadsheetId: '19Y1tZdekS7OOAr6Bii3K_E8wskNudagu1H3wmQ_CzjI',
-        range: 'Recipe List!B3:D303',
+        range: 'Recipe List!B3:D387',
     }, (err, res) => {
         if (err) return console.log('The API returned an error: ' + err);
         const rows = res.data.values;
@@ -338,4 +400,23 @@ function returnRecipe(name) {
     return [dish[finalDish[1]][0], dish[finalDish[1]][1], dish[finalDish[1]][2]];
 }
 
-bot.login(token);
+const getDefaultChannel = (guild) => {
+	// get "original" default channel
+	if(guild.channels.cache.has(guild.id))
+	return guild.channels.cache.get(guild.id)
+
+	// Check for a "general" channel, which is often default chat
+	const generalChannel = guild.channels.cache.find(channel => channel.name === "general");
+	if (generalChannel) return generalChannel;
+
+	// Now we get into the heavy stuff: first channel in order where the bot can speak
+	// hold on to your hats!
+	return guild.channels.cache
+	.filter(c => c.type === "text" &&
+		c.permissionsFor(guild.client.user).has("SEND_MESSAGES"))
+	.sort((a, b) => a.position - b.position ||
+		Long.fromString(a.id).sub(Long.fromString(b.id)).toNumber())
+	.first();
+}
+
+bot.login(token2);
