@@ -1,11 +1,13 @@
-const express = require('express');
-const app = express();
-const port = 3000;
+// const express = require('express');
+// const app = express();
+// const port = 3000;
 
 // ================= START BOT CODE =================== //
 const Discord = require('discord.js');
 
 let bot = new Discord.Client();
+
+const version = '2.5.0';
 
 const fs = require('fs');
 const readline = require('readline');
@@ -16,9 +18,48 @@ const { registerFont } = require('canvas');
 const { prefix } = require('./config.json');
 const request = require('request');
 const Database = require("@replit/database");
+const { AutoPoster } = require('topgg-autoposter');
+require('discord-buttons')(bot);
+const { MessageButton } = require('discord-buttons');
+const gacha = require("simple-gacha");
+
+const basicDroneTable = [
+    {
+        "name" : "Medical Chip",
+        "weight" : 71
+    },
+    {
+        "name" : "Combat Chip",
+        "weight" : 141
+    },
+    {
+        "name" : "Pack Chip",
+        "weight" : 283
+    },
+	{
+        "name" : "Self-Destruct Chip",
+        "weight" : 141
+    },
+    {
+        "name" : "Photoetching Pen",
+        "weight" : 1413
+    },
+	{
+        "name" : "Module Etchant",
+        "weight" : 2650
+    },
+    {
+        "name" : "Polymer Coating",
+        "weight" : 1767
+    },
+	{
+        "name" : "Film Fabric",
+        "weight" : 3534
+	}
+]
 
 const db = new Database();
-
+//console.log(process.env.REPLIT_DB_URL)
 const helpEmbed = new Discord.MessageEmbed()
 	.setColor('#EEFF00')
 	.setTitle('Help Menu')
@@ -39,18 +80,39 @@ const helpEmbed = new Discord.MessageEmbed()
 	.setTimestamp()
 	.setFooter('Contact Simon#0988 for suggestions, feedbacks & questions about the bot', 'https://cdn.discordapp.com/avatars/668573457147101195/7cdde3430684d449a80e6c441eee0492.png');
 
+const basicDroneEmbed = new Discord.MessageEmbed()
+			.setColor('#00FFFF')
+			.setTitle('Basic Drone Pack')
+			.setDescription('LifeAfter Lootbox Simulator')
+			.addFields(
+				{ name: '\u200B', value: '\u200B' }
+			)
+			.setFooter('Created by Simon#0988');
+
+let recipeButton = new MessageButton()
+	.setStyle('url')
+	.setURL('http://bit.ly/LArecipe') 
+	.setLabel('LifeAfter Official Recipe List');
+
+let nanoButton = new MessageButton()
+	.setStyle('url')
+	.setURL('http://bit.ly/LAnanoplastic') 
+	.setLabel('LifeAfter Official Nanoplastic Conversion List');
+
+let basicDroneButton = new MessageButton()
+	.setStyle('blurple')
+	.setLabel('Open') 
+	.setID('basic_drone');
+
 registerFont('fonts/Roboto-Regular.ttf', { family: 'Roboto' });
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 const TOKEN_PATH = 'token.json';
 
-//const token2 = process.env.DISCORD_TOKEN;
-
 const token2 = process.env['DISCORD_TOKEN'];
 
-const version = '2.3.1';
-app.get('/', (req, res) => res.send(version));
-app.listen(port, () => console.log(`Example app listening at http://localhost:${port}`));
+// app.get('/', (req, res) => res.send(version));
+// app.listen(port, () => console.log(`Example app listening at http://localhost:${port}`));
 
 fs.readFile('credentials.json', (err, content) => {
     if (err) return console.log('Error loading client secret file:', err);
@@ -94,8 +156,15 @@ function getNewToken(oAuth2Client, callback) {
     });
 }
 
+
+const poster = AutoPoster('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY2ODU3MzQ1NzE0NzEwMTE5NSIsImJvdCI6dHJ1ZSwiaWF0IjoxNjIzOTM2MTUyfQ.Ex-T7HAa3761ffTZBxla8OfZe1FzBDY6H023EjktL8Y', bot);
+
+poster.on('posted', (stats) => {
+  console.log(`Posted stats to Top.gg | ${stats.serverCount} servers`)
+})
+
 bot.on('ready', () => {
-    console.log('This bot is online!');
+    console.log('This bot is online!');	
     bot.user.setActivity('Simon#0988', { type: 'LISTENING'});
 })
 
@@ -107,12 +176,16 @@ bot.on('message', async message => {
 	argu.shift().toLowerCase();
 
     if (message.content.startsWith(`${prefix}servers`) && message.author.id === process.env.SIMON_ID) {
-		message.reply('Sent in PM!');
+		let serverCount = 0;
 		bot.guilds.cache.forEach((guild) => {
-        	message.author.send(guild.name);
-    	});
-		return;
+        		serverCount++;
+    		});
+		return message.channel.send("I am currently in **" + serverCount + "** servers!");
     }
+
+	else if (message.content.startsWith(`${prefix}roll`)) {
+		return message.channel.send("᲼᲼᲼᲼᲼᲼", { buttons: basicDroneButton, embed: basicDroneEmbed });
+	}
 
 	else if (message.content.startsWith(`${prefix}probability`)) {
 		return message.channel.send("https://docs.google.com/spreadsheets/d/1PPzNGzTL70ytrQNEHnGeHpY9hTYB2J_yiYuEBPqgg_A/edit?usp=sharing");
@@ -223,12 +296,12 @@ bot.on('message', async message => {
 	else if (message.content.startsWith(`${prefix}nano`)) {
 		var args = argu.join(" ");
 
-		if (!args) return message.channel.send("<http://bit.ly/LAnanoplastic>");
+		if (!args) return message.channel.send("᲼᲼᲼᲼᲼᲼", nanoButton);
 
 		var finalNano =  returnNano(args);
 
 		if (finalNano === "No such item found.") {
-			return message.channel.send(finalNano);
+			return message.channel.send(finalNano, nanoButton);
 		}
 
 		var itemName = finalNano[0];
@@ -239,18 +312,18 @@ bot.on('message', async message => {
 		var itemMinNano3 = finalNano[5];
 		var itemMaxNano3 = finalNano[6];
 
-		return message.channel.send("**Item**: " + itemName + "\n\n**Nanoplastic 1**: " + itemMinNano1 + " - " + itemMaxNano1 + "\n**Nanoplastic 2**: " + itemMinNano2 + " - " + itemMaxNano2 + "\n**Nanoplastic 3**: " + itemMinNano3 + " - " + itemMaxNano3);
+		return message.channel.send("**Item**: " + itemName + "\n\n**Nanoplastic 1**: " + itemMinNano1 + " - " + itemMaxNano1 + "\n**Nanoplastic 2**: " + itemMinNano2 + " - " + itemMaxNano2 + "\n**Nanoplastic 3**: " + itemMinNano3 + " - " + itemMaxNano3, nanoButton);
 	}
 
 	else if (message.content.startsWith(`${prefix}recipe`)) {
 		var args = argu.join(" ");
 
-		if (!args) return message.channel.send("<http://bit.ly/LArecipe>");
+		if (!args) return message.channel.send("᲼᲼᲼᲼᲼᲼", recipeButton);
 
 		var finalRecipe =  returnRecipe(args);
 
 		if (finalRecipe === "No such recipe found.") {
-			return message.channel.send(finalRecipe);
+			return message.channel.send(finalRecipe, recipeButton);
 		}
 
 		var recipeName = finalRecipe[0];
@@ -288,7 +361,20 @@ bot.on('message', async message => {
 
 		const attachment = new Discord.MessageAttachment(canvas.toBuffer(), "recipe.png");
 
-		return message.channel.send("", attachment);
+		return message.channel.send("", {files: [attachment], component: recipeButton});
+	}
+})
+
+bot.on('clickButton', async (button) => {
+	if (button.id === 'basic_drone') {
+		await button.clicker.fetch();
+		const user = button.clicker.user.id;
+		const { pick } = gacha.simple(basicDroneTable);
+		const rate = parseInt(pick.weight) / 100;
+		basicDroneEmbed.fields[0] = { name: pick.name, value: "Probability: " + rate.toFixed(2) + "%"};
+		await button.channel.send("<@" + user + ">", { buttons: basicDroneButton, embed: basicDroneEmbed });
+		basicDroneEmbed.fields[0] = { name: '\u200B', value: '\u200B' };
+		button.defer();
 	}
 })
 
@@ -318,7 +404,7 @@ function listNano(auth) {
 	const sheets = google.sheets({ version: 'v4', auth });
     sheets.spreadsheets.values.get({
         spreadsheetId: '19Y1tZdekS7OOAr6Bii3K_E8wskNudagu1H3wmQ_CzjI',
-        range: 'Nanoplastic Conversion!B3:I125',
+        range: 'Nanoplastic Conversion!B3:I137',
     }, (err, res) => {
         if (err) return console.log('The API returned an error: ' + err);
         const rows = res.data.values;
@@ -334,6 +420,10 @@ function listNano(auth) {
 }
 
 function returnNano(name) {
+	if (name === 'random') {
+		let randomNano = nanos[Math.floor(Math.random() * (nanos.length - 1))].split("; ");
+		return [randomNano[0], randomNano[1], randomNano[2], randomNano[3], randomNano[4], randomNano[5], randomNano[6]];
+	}
     var i;
     for (i = 0; i < nanos.length; i++) {
         let item = nanos[i].split("; ");
